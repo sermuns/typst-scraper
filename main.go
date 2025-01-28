@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/chromedp/cdproto/runtime"
 	"log"
 	"os"
+	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	"github.com/joho/godotenv"
 )
@@ -27,27 +30,27 @@ func main() {
 		log.Fatal("EMAIL or PASSWORD is not set in the environment variables")
 	}
 
-	// Create a context
-	ctx, cancel := chromedp.NewContext(context.Background())
+	// Create a context with specific options
+	options := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", false),
+		chromedp.Flag("disable-extensions", true),
+		chromedp.Flag("no-sandbox", true),
+	)
+
+	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), options...)
+	defer cancel()
+
+	// Create a browser context
+	parentCtx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()
 
 	// Set timeout for the overall process
-	ctx, cancel = context.WithTimeout(ctx, 5*time.Minute)
+	parentCtx, cancel = context.WithTimeout(parentCtx, 5*time.Minute)
 	defer cancel()
 
-	// Start the browser and restore cookies if available
-	if err := restoreCookies(ctx); err != nil {
-		log.Printf("Failed to restore cookies: %v", err)
-	}
-
 	// Check if we're logged in; if not, perform login
-	if err := ensureLoggedIn(ctx, email, password); err != nil {
+	if err := login(parentCtx, email, password); err != nil {
 		log.Fatalf("Failed to log in: %v", err)
-	}
-
-	// Save cookies for future runs
-	if err := saveCookies(ctx); err != nil {
-		log.Printf("Failed to save cookies: %v", err)
 	}
 
 	// Proceed with the main task
@@ -55,9 +58,9 @@ func main() {
 	var links []string
 
 	// Step 1: Navigate to the start URL and extract links
-	err := chromedp.Run(ctx,
+	err := chromedp.Run(parentCtx,
 		chromedp.Navigate(startURL),
-		chromedp.Sleep(2*time.Second),
+		chromedp.Sleep(1*time.Second),
 		chromedp.Evaluate(`Array.from(document.querySelectorAll('main > *:nth-child(2) > * a')).map(a => a.href)`, &links),
 	)
 	if err != nil {
@@ -66,41 +69,37 @@ func main() {
 
 	log.Printf("Found %d links", len(links))
 
-	// Step 2: Process each link
+	// Step 2: Process each link in parallel
+	var wg sync.WaitGroup
 	for _, link := range links {
-		log.Printf("Processing link: %s", link)
-		if err := processLink(ctx, link); err != nil {
-			log.Printf("Error processing link %s: %v", link, err)
-		}
+		wg.Add(1)
+		go func(link string) {
+			defer wg.Done()
+
+			// Create a new tab (context) for each link
+			tabCtx, cancel := chromedp.NewContext(parentCtx)
+			defer cancel()
+
+			if err := processLink(tabCtx, link); err != nil {
+				log.Printf("Error processing link %s: %v", link, err)
+			}
+		}(link)
 	}
+
+	// Wait for all links to be processed
+	wg.Wait()
+	log.Println("All links processed.")
 }
 
-func ensureLoggedIn(ctx context.Context, username, password string) error {
-	// Check if already logged in
-	var loggedIn bool
-	err := chromedp.Run(ctx,
-		chromedp.Navigate("https://typst.app/home"),
-		chromedp.Sleep(2*time.Second),
-		chromedp.Evaluate(`document.body.textContent.includes("Sign out")`, &loggedIn),
-	)
-	if err != nil {
-		return err
-	}
-
-	if loggedIn {
-		log.Println("Already logged in")
-		return nil
-	}
-
-	// Perform login
+func login(ctx context.Context, username, password string) error {
 	log.Println("Logging in...")
-	err = chromedp.Run(ctx,
+	err := chromedp.Run(ctx,
 		chromedp.Navigate("https://typst.app/signin"),
 		chromedp.WaitVisible(`#email`, chromedp.ByID),
 		chromedp.SendKeys(`#email`, username, chromedp.ByID),
 		chromedp.SendKeys(`#password`, password, chromedp.ByID),
 		chromedp.Click(`input[type="submit"]`, chromedp.ByQuery),
-		chromedp.Sleep(3*time.Second), // Wait for login to complete
+		chromedp.Sleep(1*time.Second), // Wait for login to complete
 	)
 	if err != nil {
 		return fmt.Errorf("login failed: %w", err)
@@ -110,84 +109,42 @@ func ensureLoggedIn(ctx context.Context, username, password string) error {
 	return nil
 }
 
-func saveCookies(ctx context.Context) error {
-	var cookies []*chromedp.Cookie
-	err := chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			cookies, err = chromedp.Cookies(ctx)
-			return err
-		}),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to get cookies: %w", err)
-	}
-
-	file, err := os.Create(cookieFile)
-	if err != nil {
-		return fmt.Errorf("failed to create cookie file: %w", err)
-	}
-	defer file.Close()
-
-	if err := json.NewEncoder(file).Encode(cookies); err != nil {
-		return fmt.Errorf("failed to encode cookies: %w", err)
-	}
-
-	log.Printf("Cookies saved to %s", cookieFile)
-	return nil
-}
-
-func restoreCookies(ctx context.Context) error {
-	file, err := os.Open(cookieFile)
-	if os.IsNotExist(err) {
-		log.Println("No cookie file found, skipping cookie restoration.")
-		return nil
-	} else if err != nil {
-		return fmt.Errorf("failed to open cookie file: %w", err)
-	}
-	defer file.Close()
-
-	var cookies []*chromedp.Cookie
-	if err := json.NewDecoder(file).Decode(&cookies); err != nil {
-		return fmt.Errorf("failed to decode cookies: %w", err)
-	}
-
-	err = chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			for _, cookie := range cookies {
-				if err := chromedp.SetCookie(cookie).Do(ctx); err != nil {
-					log.Printf("Failed to set cookie %s: %v", cookie.Name, err)
-				}
-			}
-			return nil
-		}),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to restore cookies: %w", err)
-	}
-
-	log.Println("Cookies restored")
-	return nil
-}
-
 func processLink(ctx context.Context, link string) error {
 	var zipFileName string
 
 	// Navigate to the link, click the "File" button and "Backup project" parent
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(link),
-		chromedp.Sleep(2*time.Second), // Wait for the page to load
+		chromedp.Sleep(10*time.Second), // Wait for the page to load
 
-		// Click the <button> with textContent "File"
-		chromedp.Click(`//button[contains(text(), 'File')]`, chromedp.NodeVisible),
+		// Select the "File" button node
+		chromedp.QueryAfter(`span`,
+			func(ctx context.Context, eci runtime.ExecutionContextID, nodes ...*cdp.Node) error {
+				for _, node := range nodes {
+					// find one with correct innertext, click it.
+					var innerText string
+					if err := chromedp.Text(node, &innerText).Do(ctx); err != nil {
+						return err
+					}
 
-		// Click the parent of <span> with textContent "Backup project"
-		chromedp.Click(`//span[contains(text(), 'Backup project')]/..`, chromedp.NodeVisible),
+					// Check if the text matches "File"
+					if innerText == "File" {
+						// Perform the mouse click on the node
+						return chromedp.MouseClickNode(node).Do(ctx)
+					}
+				}
+				return errors.New("Couldnt find File button")
+			}, chromedp.ByID),
+
+		// // Select the parent of <span> with textContent "Backup project" node
+		// chromedp.Nodes(`span[text()='Backup project']/..`, &nodes), // Select the element
+		// chromedp.MouseClickNode(nodes[0]),                          // Click the node
 
 		// Wait for the download (depends on your Chrome setup; use appropriate handling)
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			zipFileName = fmt.Sprintf("backup_%d.zip", time.Now().Unix())
-			log.Printf("Simulated saving: %s", zipFileName)
+			log.Printf("Download initiated: %s", zipFileName)
+			// File should be downloaded automatically by the browser to the specified directory
 			return nil
 		}),
 	)
@@ -195,7 +152,5 @@ func processLink(ctx context.Context, link string) error {
 		return fmt.Errorf("failed to process link %s: %w", link, err)
 	}
 
-	log.Printf("Processed link: %s, saved file as: %s", link, zipFileName)
 	return nil
 }
-
