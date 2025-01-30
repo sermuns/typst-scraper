@@ -143,6 +143,9 @@ if __name__ == "__main__":
     os.makedirs("work", exist_ok=True)
     os.chdir("work")
 
+    # remove stray *.zip
+    os.system("rm *.zip")
+
     if not os.path.exists("repo"):
         os.system("git clone git@github.com:sermuns/pum2-typst-backup.git repo")
         print("Cloned repo.")
