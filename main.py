@@ -135,7 +135,7 @@ if __name__ == "__main__":
         if not file.endswith(".zip"):
             continue
         dir_name = os.path.splitext(file)[0]
-        os.system(f'unzip "{file}" -d "repo/{dir_name}"')
+        os.system(f'unzip -o "{file}" -d "repo/{dir_name}"')
         print(f'Unzipped {file} into repo/{dir_name}')
         os.remove(file)
 
