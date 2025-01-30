@@ -9,6 +9,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.common.action_chains import ActionChains
 
 if not os.path.exists(".env"):
     print("No .env file found. Exiting.")
@@ -24,18 +25,17 @@ COOKIE_FILE = "cookies.pkl"
 def setup_driver():
     options = Options()
     options.add_argument("--headless")  # Run in headless mode
-    # options.add_argument("--disable-gpu")  # Disable GPU acceleration (sometimes necessary in headless mode)
     options.set_preference("browser.download.folderList", 2)
-    options.set_preference("browser.download.manager.showWhenStarting", False)
     options.set_preference("browser.download.dir", os.getcwd())
     options.set_preference("browser.download.useDownloadDir", True)
-    # options.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/zip")
+    options.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/zip")
 
     return webdriver.Firefox(options=options)
 
 
 def check_if_logged_in():
     driver.get("https://typst.app/home")
+    load_cookies(driver)
     WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.ID, "header-btn"))
     )
@@ -44,14 +44,16 @@ def check_if_logged_in():
 
 
 def load_cookies(driver):
-    if os.path.exists(COOKIE_FILE):
-        driver.get("https://typst.app/")
-        with open(COOKIE_FILE, "rb") as cookie_file:
-            cookies = pickle.load(cookie_file)
-            for cookie in cookies:
-                driver.add_cookie(cookie)
-        print("Cookies loaded.")
-        driver.refresh()
+    if not os.path.exists(COOKIE_FILE):
+        print("No cookies saved")
+        return
+
+    with open(COOKIE_FILE, "rb") as cookie_file:
+        cookies = pickle.load(cookie_file)
+        for cookie in cookies:
+            driver.add_cookie(cookie)
+    print("Cookies loaded.")
+    driver.refresh()
 
 
 def save_cookies(driver):
@@ -61,13 +63,12 @@ def save_cookies(driver):
 
 
 def login(driver):
-    load_cookies(driver)
     if check_if_logged_in():
         print("Already logged in.")
         return
 
-    # Go to the signin page
     driver.get("https://typst.app/signin/")
+
     WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "email")))
 
     # Fill out the email and password fields
@@ -87,7 +88,7 @@ def login(driver):
     save_cookies(driver)
 
 
-def automate_task(driver):
+def backup_typst(driver):
     # 1. Go to the specified page
     driver.get("https://typst.app/team/aKj7S1kHEc96JAgoh1C5Ri")
 
@@ -122,15 +123,14 @@ def automate_task(driver):
                     (By.XPATH, "//span[text()='Backup project']")
                 )
             )
-            # Find the <span> with text "Backup project" and click its parent
+
             backup_span = driver.find_element(
                 By.XPATH, "//span[text() = 'Backup project']"
             )
-            backup_span_parent = backup_span.find_element(By.XPATH, "parent::*")
-            backup_span_parent.click()
+            ActionChains(driver).move_to_element(backup_span).click().perform()
 
             print(f"Downloaded {driver.title}")
-            time.sleep(1)
+            time.sleep(0.5)
 
         except Exception as e:
             print(f"Error encountered on link {href}: {e}")
@@ -151,12 +151,14 @@ if __name__ == "__main__":
         print("Cloned repo.")
 
     driver = setup_driver()
-    login(driver)  # Log in first (either from cookies or by logging in)
-    automate_task(driver)  # After login, automate the task
+    login(driver)
+    backup_typst(driver)
 
     # unzip all zips into directories matching the zip names
     for file in os.listdir(os.getcwd()):
         if not file.endswith(".zip"):
+            continue
+        if file.endswith("(1).zip"):
             continue
         dir_name = os.path.splitext(file)[0]
         os.system(f'unzip -o "{file}" -d "repo/{dir_name}"')
@@ -168,5 +170,5 @@ if __name__ == "__main__":
 
     os.system("git add .")
     os.system("git commit -m 'Automated commit'")
-    os.system("git push -f") # god forgive me
+    os.system("git push -f")  # god forgive me
     print("Pushed to remote.")
