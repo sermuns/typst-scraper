@@ -163,8 +163,7 @@ if __name__ == "__main__":
     print("All zips unzipped.")
     os.chdir("repo")
 
-    # Try to git add . then commit. If no changes, no problem
     os.system("git add .")
     os.system("git commit -m 'Automated commit'")
-    os.system("git push")
+    os.system("git push -f") # god forgive me
     print("Pushed to remote.")
