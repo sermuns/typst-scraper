@@ -2,8 +2,6 @@ import os
 import pickle
 import time
 
-from datetime import datetime
-
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -26,7 +24,7 @@ def check_if_logged_in():
 
 def setup_driver():
     options = webdriver.ChromeOptions()
-    # options.add_argument("--headless")  # Run in headless mode
+    options.add_argument("--headless")  # Run in headless mode
     options.add_argument("--disable-gpu")  # Disable GPU acceleration (sometimes necessary in headless mode)
     preferences = {
                 "profile.default_content_settings.popups": 0,
@@ -118,11 +116,34 @@ def automate_task(driver):
     driver.quit()
 
 if __name__ == "__main__":
+    if not os.path.exists("work"):
+        print("Please create a 'work' directory in cwd")
+        exit(1)
+
+    os.chdir("work")
+
+    if not os.path.exists("repo"):
+        os.system("git clone git@github.com:sermuns/pum2-typst-backup.git repo")
+        print("Cloned repo.")
+
     driver = setup_driver()
     login(driver)  # Log in first (either from cookies or by logging in)
     automate_task(driver)  # After login, automate the task
 
-    # create datetime dir, put *.zip into it.
-    dt_string = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    os.mkdir(dt_string)
-    os.system(f"mv *.zip {dt_string}")
+    # unzip all zips into directories matching the zip names
+    for file in os.listdir(os.getcwd()):
+        if not file.endswith(".zip"):
+            continue
+        dir_name = os.path.splitext(file)[0]
+        os.system(f'unzip "{file}" -d "repo/{dir_name}"')
+        print(f'Unzipped {file} into repo/{dir_name}')
+        os.remove(file)
+
+    print("All zips unzipped.")
+    os.chdir("repo")
+    
+    # Try to git add . then commit. If no changes, no problem
+    os.system("git add .")
+    os.system("git commit -m 'Automated commit'")
+    os.system("git push")
+    print("Pushed to remote.")
