@@ -19,6 +19,7 @@ load_dotenv()
 
 EMAIL = os.getenv("EMAIL")
 PASSWORD = os.getenv("PASSWORD")
+TEAM_URL = os.getenv("TEAM_URL")
 COOKIE_FILE = "cookies.pkl"
 
 
@@ -90,7 +91,7 @@ def login(driver):
 
 def backup_typst(driver):
     # 1. Go to the specified page
-    driver.get("https://typst.app/team/aKj7S1kHEc96JAgoh1C5Ri")
+    driver.get(TEAM_URL)
 
     # Wait for the links to be present
     WebDriverWait(driver, 10).until(
