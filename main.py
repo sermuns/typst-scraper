@@ -136,6 +136,7 @@ def backup_typst(driver):
             print(f"Error encountered on link {href}: {e}")
 
     print("Task completed.")
+    driver.close()
     driver.quit()
 
 
