@@ -130,7 +130,7 @@ def backup_typst(driver):
             ActionChains(driver).move_to_element(backup_span).click().perform()
 
             print(f"Downloaded {driver.title}")
-            time.sleep(0.5)
+            time.sleep(5)
 
         except Exception as e:
             print(f"Error encountered on link {href}: {e}")
