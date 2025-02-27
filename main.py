@@ -25,6 +25,8 @@ PASSWORD = os.getenv("PASSWORD")
 COOKIE_FILE = "cookies.pkl"
 
 
+WAIT_SECONDS = 20
+
 def setup_driver():
     options = Options()
     options.add_argument("--headless")  # Run in headless mode
@@ -40,7 +42,7 @@ def setup_driver():
 def check_if_logged_in():
     driver.get("https://typst.app/home")
     load_cookies(driver)
-    WebDriverWait(driver, 10).until(
+    WebDriverWait(driver, WAIT_SECONDS).until(
         EC.presence_of_element_located((By.ID, "header-btn"))
     )
     header_btn = driver.find_element(By.ID, "header-btn")
@@ -73,7 +75,7 @@ def login(driver):
 
     driver.get("https://typst.app/signin/")
 
-    WebDriverWait(driver, 10).until(
+    WebDriverWait(driver, WAIT_SECONDS).until(
         EC.presence_of_element_located((By.ID, "email")))
 
     # Fill out the email and password fields
@@ -85,7 +87,7 @@ def login(driver):
 
     # Submit the form
     password_input.send_keys(Keys.RETURN)
-    WebDriverWait(driver, 10).until(
+    WebDriverWait(driver, WAIT_SECONDS).until(
         EC.presence_of_element_located((By.XPATH, "//main"))
     )
 
@@ -98,7 +100,7 @@ def backup_typst(driver):
     driver.get("https://typst.app/team/aKj7S1kHEc96JAgoh1C5Ri")
 
     # Wait for the links to be present
-    WebDriverWait(driver, 10).until(
+    WebDriverWait(driver, WAIT_SECONDS).until(
         EC.presence_of_all_elements_located(
             (By.CSS_SELECTOR, "main > :nth-child(2) a"))
     )
@@ -112,7 +114,8 @@ def backup_typst(driver):
             driver.get(href)
 
             # Wait for the 'File' button to be visible before interacting
-            WebDriverWait(driver, 10).until(
+            time.sleep(5)
+            WebDriverWait(driver, WAIT_SECONDS).until(
                 EC.presence_of_element_located(
                     (By.XPATH, "//button[text()='File']"))
             )
@@ -126,7 +129,8 @@ def backup_typst(driver):
             file_button.click()
 
             # Wait for the "Backup project" button to be clickable
-            WebDriverWait(driver, 10).until(
+            time.sleep(5)
+            WebDriverWait(driver, WAIT_SECONDS).until(
                 EC.element_to_be_clickable(
                     (By.XPATH, "//span[text()='Backup project']")
                 )
