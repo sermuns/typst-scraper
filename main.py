@@ -10,6 +10,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.firefox.service import Service
+from webdriver_manager.firefox import GeckoDriverManager
+
 
 if not os.path.exists(".env"):
     print("No .env file found. Exiting.")
@@ -28,9 +31,10 @@ def setup_driver():
     options.set_preference("browser.download.folderList", 2)
     options.set_preference("browser.download.dir", os.getcwd())
     options.set_preference("browser.download.useDownloadDir", True)
-    options.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/zip")
+    options.set_preference(
+        "browser.helperApps.neverAsk.saveToDisk", "application/zip")
 
-    return webdriver.Firefox(options=options)
+    return webdriver.Firefox(options=options, service=Service(GeckoDriverManager().install()))
 
 
 def check_if_logged_in():
@@ -69,7 +73,8 @@ def login(driver):
 
     driver.get("https://typst.app/signin/")
 
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "email")))
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "email")))
 
     # Fill out the email and password fields
     email_input = driver.find_element(By.ID, "email")
@@ -94,7 +99,8 @@ def backup_typst(driver):
 
     # Wait for the links to be present
     WebDriverWait(driver, 10).until(
-        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "main > :nth-child(2) a"))
+        EC.presence_of_all_elements_located(
+            (By.CSS_SELECTOR, "main > :nth-child(2) a"))
     )
 
     # 2. Get all children of <main> (specifically from children[1])
@@ -107,14 +113,16 @@ def backup_typst(driver):
 
             # Wait for the 'File' button to be visible before interacting
             WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, "//button[text()='File']"))
+                EC.presence_of_element_located(
+                    (By.XPATH, "//button[text()='File']"))
             )
 
             # # Switch to the newly opened tab
             driver.switch_to.window(driver.window_handles[-1])
 
             # Perform task on this new tab
-            file_button = driver.find_element(By.XPATH, "//button[text() = 'File']")
+            file_button = driver.find_element(
+                By.XPATH, "//button[text() = 'File']")
             file_button.click()
 
             # Wait for the "Backup project" button to be clickable
@@ -141,6 +149,8 @@ def backup_typst(driver):
 
 
 if __name__ == "__main__":
+    os.system("rm -rf /tmp/rust_mozprofile*")
+
     os.makedirs("work", exist_ok=True)
     os.chdir("work")
 
