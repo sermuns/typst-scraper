@@ -1,5 +1,4 @@
 import os
-import pickle
 import time
 
 from dotenv import load_dotenv
@@ -22,61 +21,30 @@ load_dotenv()
 
 EMAIL = os.getenv("EMAIL")
 PASSWORD = os.getenv("PASSWORD")
-COOKIE_FILE = "cookies.pkl"
 
 
 WAIT_SECONDS = 20
 
+
 def setup_driver():
     options = Options()
-    # options.add_argument("--headless")  # Run in headless mode
+    options.add_argument("--headless")  # Run in headless mode
     options.set_preference("browser.download.folderList", 2)
     options.set_preference("browser.download.dir", os.getcwd())
     options.set_preference("browser.download.useDownloadDir", True)
-    options.set_preference(
-        "browser.helperApps.neverAsk.saveToDisk", "application/zip")
+    options.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/zip")
 
-    return webdriver.Firefox(options=options, service=Service(GeckoDriverManager().install()))
-
-
-def check_if_logged_in():
-    driver.get("https://typst.app/home")
-    load_cookies(driver)
-    WebDriverWait(driver, WAIT_SECONDS).until(
-        EC.presence_of_element_located((By.ID, "header-btn"))
+    return webdriver.Firefox(
+        options=options, service=Service(GeckoDriverManager().install())
     )
-    header_btn = driver.find_element(By.ID, "header-btn")
-    return header_btn.get_attribute("href") == "https://typst.app/app/"
-
-
-def load_cookies(driver):
-    if not os.path.exists(COOKIE_FILE):
-        print("No cookies saved")
-        return
-
-    with open(COOKIE_FILE, "rb") as cookie_file:
-        cookies = pickle.load(cookie_file)
-        for cookie in cookies:
-            driver.add_cookie(cookie)
-    print("Cookies loaded.")
-    driver.refresh()
-
-
-def save_cookies(driver):
-    with open(COOKIE_FILE, "wb") as cookie_file:
-        pickle.dump(driver.get_cookies(), cookie_file)
-    print("Cookies saved.")
 
 
 def login(driver):
-    if check_if_logged_in():
-        print("Already logged in.")
-        return
-
     driver.get("https://typst.app/signin/")
 
     WebDriverWait(driver, WAIT_SECONDS).until(
-        EC.presence_of_element_located((By.ID, "email")))
+        EC.presence_of_element_located((By.ID, "email"))
+    )
 
     # Fill out the email and password fields
     email_input = driver.find_element(By.ID, "email")
@@ -91,9 +59,6 @@ def login(driver):
         EC.presence_of_element_located((By.XPATH, "//main"))
     )
 
-    # Save cookies after login
-    save_cookies(driver)
-
 
 def backup_typst(driver):
     # 1. Go to the specified page
@@ -101,8 +66,7 @@ def backup_typst(driver):
 
     # Wait for the links to be present
     WebDriverWait(driver, WAIT_SECONDS).until(
-        EC.presence_of_all_elements_located(
-            (By.CSS_SELECTOR, "main > :nth-child(3) a"))
+        EC.presence_of_all_elements_located((By.CSS_SELECTOR, "main > :nth-child(3) a"))
     )
 
     # 2. Get all children of <main> (specifically from children[1])
@@ -116,16 +80,14 @@ def backup_typst(driver):
             # Wait for the 'File' button to be visible before interacting
             time.sleep(5)
             WebDriverWait(driver, WAIT_SECONDS).until(
-                EC.presence_of_element_located(
-                    (By.XPATH, "//button[text()='File']"))
+                EC.presence_of_element_located((By.XPATH, "//button[text()='File']"))
             )
 
             # # Switch to the newly opened tab
             driver.switch_to.window(driver.window_handles[-1])
 
             # Perform task on this new tab
-            file_button = driver.find_element(
-                By.XPATH, "//button[text() = 'File']")
+            file_button = driver.find_element(By.XPATH, "//button[text() = 'File']")
             file_button.click()
 
             # Wait for the "Backup project" button to be clickable
