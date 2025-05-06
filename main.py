@@ -29,7 +29,7 @@ WAIT_SECONDS = 20
 
 def setup_driver():
     options = Options()
-    options.add_argument("--headless")  # Run in headless mode
+    # options.add_argument("--headless")  # Run in headless mode
     options.set_preference("browser.download.folderList", 2)
     options.set_preference("browser.download.dir", os.getcwd())
     options.set_preference("browser.download.useDownloadDir", True)
@@ -102,11 +102,11 @@ def backup_typst(driver):
     # Wait for the links to be present
     WebDriverWait(driver, WAIT_SECONDS).until(
         EC.presence_of_all_elements_located(
-            (By.CSS_SELECTOR, "main > :nth-child(2) a"))
+            (By.CSS_SELECTOR, "main > :nth-child(3) a"))
     )
 
     # 2. Get all children of <main> (specifically from children[1])
-    links = driver.find_elements(By.CSS_SELECTOR, "main > :nth-child(2) a")
+    links = driver.find_elements(By.CSS_SELECTOR, "main > :nth-child(3) a")
     hrefs = [link.get_attribute("href") for link in links]
 
     for href in hrefs:
